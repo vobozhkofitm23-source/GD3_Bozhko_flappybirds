@@ -1,4 +1,5 @@
 using UnityEngine;
+using Random = UnityEngine.Random;
 
 namespace TopDownShooter
 {
@@ -17,12 +18,19 @@ namespace TopDownShooter
             if (prefab == null) return null;
 
             var obj = Instantiate(prefab, transform.position, Quaternion.identity);
+            obj.SetActive(true);
             var enemy = obj.GetComponent<Enemy>();
 
             if (enemy != null)
                 enemy.Initialize(player);
 
             return enemy;
+        }
+
+        public void SetRuntimeEnemyPrefab(GameObject enemyPrefab)
+        {
+            if (enemyPrefab == null) return;
+            _enemyPrefabs = new[] { enemyPrefab };
         }
 
         private void OnDrawGizmos()

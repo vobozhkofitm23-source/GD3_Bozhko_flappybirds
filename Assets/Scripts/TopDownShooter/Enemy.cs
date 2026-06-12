@@ -12,8 +12,14 @@ namespace TopDownShooter
         [SerializeField] private float _attackCooldown = 1f;
         [SerializeField] private int _points = 10;
 
+        [Header("Detection")]
+        [SerializeField] private float _detectionRange = 12f;
+        [SerializeField] private float _attackRange = 0.75f;
+        [SerializeField] private float _knockbackForce = 2f;
+
         private float _currentHealth;
         private Transform _player;
+        private Player _playerComponent;
         private float _attackTimer;
 
         public event Action<int> OnDeath;
@@ -22,6 +28,7 @@ namespace TopDownShooter
         public void Initialize(Transform player)
         {
             _player = player;
+            _playerComponent = player != null ? player.GetComponent<Player>() : null;
             _currentHealth = _maxHealth;
         }
 
@@ -29,8 +36,19 @@ namespace TopDownShooter
         {
             if (!IsAlive || _player == null) return;
 
-            MoveTowardsPlayer();
+            if (_playerComponent == null)
+                _playerComponent = _player.GetComponent<Player>();
+
+            if (IsPlayerInDetectionRange())
+                MoveTowardsPlayer();
+
+            TryAttackPlayer();
             _attackTimer -= Time.deltaTime;
+        }
+
+        private bool IsPlayerInDetectionRange()
+        {
+            return Vector2.Distance(transform.position, _player.position) <= _detectionRange;
         }
 
         private void MoveTowardsPlayer()
@@ -40,6 +58,16 @@ namespace TopDownShooter
 
             float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg - 90f;
             transform.rotation = Quaternion.Euler(0f, 0f, angle);
+        }
+
+        private void TryAttackPlayer()
+        {
+            if (_attackTimer > 0f || _playerComponent == null || !_playerComponent.IsAlive) return;
+
+            if (Vector2.Distance(transform.position, _player.position) > _attackRange) return;
+
+            _playerComponent.TakeDamage(_contactDamage);
+            _attackTimer = _attackCooldown;
         }
 
         public void TakeDamage(float damage)
@@ -55,16 +83,9 @@ namespace TopDownShooter
             }
         }
 
-        private void OnCollisionEnter2D(Collision2D collision)
+        public void ApplyKnockback(Vector2 direction)
         {
-            if (_attackTimer > 0f) return;
-
-            var player = collision.gameObject.GetComponent<Player>();
-            if (player != null)
-            {
-                player.TakeDamage(_contactDamage);
-                _attackTimer = _attackCooldown;
-            }
+            transform.position += (Vector3)(direction * _knockbackForce);
         }
     }
 }

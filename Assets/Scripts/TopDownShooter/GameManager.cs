@@ -1,6 +1,10 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 using TMPro;
+using Random = UnityEngine.Random;
 
 namespace TopDownShooter
 {
@@ -20,11 +24,18 @@ namespace TopDownShooter
         [Header("UI")]
         [SerializeField] private TextMeshProUGUI _scoreText;
         [SerializeField] private GameObject _gameOverPanel;
+        [SerializeField] private TextMeshProUGUI _gameOverText;
+        [SerializeField] private Image _gameOverBackground;
 
         private readonly List<Enemy> _activeEnemies = new();
         private float _spawnTimer;
         private int _score;
-        private bool _isGameOver;
+        private GameState _state = GameState.Playing;
+
+        public GameState State => _state;
+        public bool IsPlaying => _state == GameState.Playing;
+
+        public event Action<GameState> OnStateChanged;
 
         private void Start()
         {
@@ -32,7 +43,7 @@ namespace TopDownShooter
                 _player = FindObjectOfType<Player>();
 
             if (_player != null)
-                _player.OnDeath += GameOver;
+                _player.OnDeath += HandlePlayerDeath;
 
             if (_gameOverPanel != null)
                 _gameOverPanel.SetActive(false);
@@ -43,7 +54,14 @@ namespace TopDownShooter
 
         private void Update()
         {
-            if (_isGameOver || _player == null) return;
+            if (_state == GameState.GameOver)
+            {
+                if (GameInput.WasKeyPressed(KeyCode.R))
+                    RestartScene();
+                return;
+            }
+
+            if (_player == null) return;
 
             UpdateSpawning();
             CleanupEnemies();
@@ -61,7 +79,7 @@ namespace TopDownShooter
 
         private void SpawnEnemy()
         {
-            if (_spawnPoints == null || _spawnPoints.Length == 0) return;
+            if (_spawnPoints == null || _spawnPoints.Length == 0 || _player == null) return;
 
             int index = Random.Range(0, _spawnPoints.Length);
             var spawnPoint = _spawnPoints[index];
@@ -77,10 +95,17 @@ namespace TopDownShooter
             }
         }
 
-        private void OnEnemyDeath(int points)
+        public void AddScore(int points)
         {
+            if (!IsPlaying) return;
+
             _score += points;
             UpdateScoreUI();
+        }
+
+        private void OnEnemyDeath(int points)
+        {
+            AddScore(points);
         }
 
         private void CleanupEnemies()
@@ -98,19 +123,60 @@ namespace TopDownShooter
                 _scoreText.text = $"Score: {_score}";
         }
 
-        private void GameOver()
+        private void HandlePlayerDeath()
         {
-            if (_isGameOver) return;
-            _isGameOver = true;
+            if (_state == GameState.GameOver) return;
+
+            _state = GameState.GameOver;
+            OnStateChanged?.Invoke(_state);
 
             if (_gameOverPanel != null)
                 _gameOverPanel.SetActive(true);
+
+            if (_gameOverText != null)
+                _gameOverText.text = $"Game Over!\nScore: {_score}\nPress R to Restart";
+        }
+
+        public void RestartScene()
+        {
+            SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
+        }
+
+        public void BindRestartButton(Button restartButton)
+        {
+            if (restartButton != null)
+                restartButton.onClick.AddListener(RestartScene);
+        }
+
+        public void SetRuntimeReferences(
+            Player player,
+            TextMeshProUGUI scoreText,
+            GameObject gameOverPanel,
+            TextMeshProUGUI gameOverText,
+            Image gameOverBackground)
+        {
+            _player = player;
+            _scoreText = scoreText;
+            _gameOverPanel = gameOverPanel;
+            _gameOverText = gameOverText;
+            _gameOverBackground = gameOverBackground;
+        }
+
+        public void SetRuntimeSpawnPoints(SpawnPoint[] spawnPoints)
+        {
+            _spawnPoints = spawnPoints;
         }
 
         private void OnDestroy()
         {
             if (_player != null)
-                _player.OnDeath -= GameOver;
+                _player.OnDeath -= HandlePlayerDeath;
+
+            foreach (var enemy in _activeEnemies)
+            {
+                if (enemy != null)
+                    enemy.OnDeath -= OnEnemyDeath;
+            }
         }
     }
 }

@@ -37,10 +37,17 @@ namespace TopDownShooter
             if (_projectilePrefab == null) return;
 
             var obj = Instantiate(_projectilePrefab, _firePoint.position, _firePoint.rotation);
+            obj.SetActive(true);
             var projectile = obj.GetComponent<Projectile>();
 
             if (projectile != null)
                 projectile.Initialize(_damage);
+        }
+
+        public void SetRuntimeReferences(GameObject projectilePrefab, Transform firePoint)
+        {
+            _projectilePrefab = projectilePrefab;
+            _firePoint = firePoint;
         }
     }
 }
