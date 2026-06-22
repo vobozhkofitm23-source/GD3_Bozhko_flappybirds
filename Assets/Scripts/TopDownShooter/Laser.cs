@@ -8,8 +8,8 @@ namespace TopDownShooter
         [SerializeField] private float _damage = 5f;
         [SerializeField] private float _range = 15f;
         [SerializeField] private Transform _firePoint;
-        [SerializeField] private TrailRenderer _trail;
-        [SerializeField] private LayerMask _enemyLayer;
+        [SerializeField] private LineRenderer _beam;
+        [SerializeField] private LayerMask _enemyLayer = ~0;
 
         private float _cooldown;
 
@@ -18,8 +18,8 @@ namespace TopDownShooter
             if (_firePoint == null)
                 _firePoint = transform;
 
-            if (_trail != null)
-                _trail.enabled = false;
+            if (_beam != null)
+                _beam.enabled = false;
         }
 
         public bool TryFire()
@@ -39,8 +39,8 @@ namespace TopDownShooter
 
         public void HideTrail()
         {
-            if (_trail != null)
-                _trail.enabled = false;
+            if (_beam != null)
+                _beam.enabled = false;
         }
 
         private void Fire()
@@ -54,20 +54,29 @@ namespace TopDownShooter
             {
                 endPoint = hit.point;
 
-                var enemy = hit.collider.GetComponent<Enemy>();
-                if (enemy != null)
+                if (hit.collider.TryGetComponent(out Enemy enemy))
                     enemy.TakeDamage(_damage);
             }
 
-            ShowTrail(endPoint);
+            ShowBeam(endPoint);
         }
 
-        private void ShowTrail(Vector3 endPoint)
+        private void ShowBeam(Vector3 endPoint)
         {
-            if (_trail == null) return;
+            if (_beam == null) return;
 
-            _trail.enabled = true;
-            _trail.transform.position = endPoint;
+            _beam.enabled = true;
+            _beam.SetPosition(0, _firePoint.position);
+            _beam.SetPosition(1, endPoint);
+        }
+
+        public void SetRuntimeReferences(Transform firePoint, LineRenderer beam)
+        {
+            _firePoint = firePoint;
+            _beam = beam;
+
+            if (_beam != null)
+                _beam.enabled = false;
         }
     }
 }

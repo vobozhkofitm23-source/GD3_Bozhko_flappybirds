@@ -31,9 +31,9 @@ namespace OccaSoftware.Crosshairs.Editor
 
         void OnGUI()
         {
-            SetupHeaderStyle(startMenu);
-            SetupButtonStyle(startMenu);
-            SetupContentSectionStyle(startMenu);
+            SetupHeaderStyle(this);
+            SetupButtonStyle(this);
+            SetupContentSectionStyle(this);
 
             DrawHeader();
             DrawReviewRequest();
@@ -60,17 +60,18 @@ namespace OccaSoftware.Crosshairs.Editor
             startMenu.position = currentWindowPosition;
         }
 
-        private static void LoadLogo(StartMenu startMenu)
+        private static void LoadLogo(StartMenu menu)
         {
-            startMenu.logo = (Texture2D)
-                AssetDatabase.LoadAssetAtPath(
-                    "Assets/OccaSoftware/Crosshairs/Editor/Textures/Logo.png",
-                    typeof(Texture2D)
-                );
+            if (menu == null) return;
+
+            menu.logo = AssetDatabase.LoadAssetAtPath<Texture2D>(
+                "Assets/Graphics/ChickenHunt/OccaSoftware/Crosshairs/Editor/Textures/Logo.png");
         }
 
         private static void SetupHeaderStyle(StartMenu startMenu)
         {
+            if (startMenu == null) return;
+
             startMenu.header = new GUIStyle(EditorStyles.boldLabel);
             startMenu.header.fontSize = 18;
             startMenu.header.wordWrap = true;
@@ -79,6 +80,8 @@ namespace OccaSoftware.Crosshairs.Editor
 
         private static void SetupButtonStyle(StartMenu startMenu)
         {
+            if (startMenu == null) return;
+
             startMenu.button = new GUIStyle("button");
             startMenu.button.fontSize = 18;
             startMenu.button.fontStyle = FontStyle.Bold;
@@ -87,6 +90,8 @@ namespace OccaSoftware.Crosshairs.Editor
 
         private static void SetupContentSectionStyle(StartMenu startMenu)
         {
+            if (startMenu == null) return;
+
             startMenu.contentSection = new GUIStyle("label");
             startMenu.contentSection.margin = new RectOffset(20, 20, 20, 20);
             startMenu.contentSection.padding = new RectOffset(0, 0, 0, 0);
@@ -129,7 +134,8 @@ namespace OccaSoftware.Crosshairs.Editor
             logoStyle.padding = new RectOffset(0, 0, 0, 0);
             logoStyle.margin = new RectOffset(0, 0, 0, 0);
             logoStyle.alignment = TextAnchor.MiddleCenter;
-            GUILayout.Label(logo, logoStyle, logoOptions);
+            if (logo != null)
+                GUILayout.Label(logo, logoStyle, logoOptions);
             GUILayout.EndVertical();
         }
 

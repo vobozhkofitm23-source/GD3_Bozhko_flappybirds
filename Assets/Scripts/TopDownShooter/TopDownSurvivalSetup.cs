@@ -1,34 +1,90 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
+using UnityEngine.Rendering.Universal;
 using TMPro;
+#if UNITY_EDITOR
+using UnityEditor;
+using UnityEditor.SceneManagement;
+#endif
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem.UI;
 #endif
 
 namespace TopDownShooter
 {
+    [ExecuteAlways]
+    [DefaultExecutionOrder(-100)]
     public class TopDownSurvivalSetup : MonoBehaviour
     {
+        private const string PlayerSpritePath =
+            "Assets/Graphics/TopDownSurvival/TopDown_Soldier/SpriteSheets/Character_01/lv1 Idle.png";
+        private const string EnemySpritePath =
+            "Assets/Graphics/TopDownSurvival/Top-Down Zombie/png/z1_1.png";
+
+        private static Material _unlitSpriteMaterial;
+        private bool _isBuilding;
+
         private GameObject _enemyTemplate;
         private GameObject _projectileTemplate;
         private GameObject _pickupTemplate;
 
+        private void OnEnable()
+        {
+            if (HasBuiltContent())
+            {
+                EnsureLaserOnExistingPlayer();
+                return;
+            }
+
+            BuildContent();
+        }
+
         private void Awake()
         {
-            if (FindObjectOfType<Player>() != null) return;
+            if (!Application.isPlaying) return;
+            if (HasBuiltContent()) return;
+            BuildContent();
+        }
 
-            _enemyTemplate = CreateEnemyTemplate();
-            _projectileTemplate = CreateProjectileTemplate();
-            _pickupTemplate = CreatePickupTemplate();
+        public static bool HasBuiltContent()
+        {
+            return Object.FindObjectOfType<Player>() != null;
+        }
 
-            BuildScene();
+        public void BuildContent()
+        {
+            if (_isBuilding || HasBuiltContent()) return;
+
+            _isBuilding = true;
+            try
+            {
+                _enemyTemplate = CreateEnemyTemplate();
+                _projectileTemplate = CreateProjectileTemplate();
+                _pickupTemplate = CreatePickupTemplate();
+
+                BuildScene();
+                FixGlobalLight2D();
+
+#if UNITY_EDITOR
+                if (!Application.isPlaying)
+                {
+                    EditorSceneManager.MarkSceneDirty(gameObject.scene);
+                    EditorUtility.SetDirty(this);
+                }
+#endif
+            }
+            finally
+            {
+                _isBuilding = false;
+            }
         }
 
         private void BuildScene()
         {
             EnsureEventSystem();
             EnsureCamera();
+            EnsureBackground();
 
             var ui = BuildUI();
             var player = BuildPlayer(ui);
@@ -46,6 +102,33 @@ namespace TopDownShooter
             camera.orthographicSize = 6f;
             camera.transform.position = new Vector3(0f, 0f, -10f);
             camera.backgroundColor = new Color(0.15f, 0.2f, 0.15f);
+        }
+
+        private void FixGlobalLight2D()
+        {
+            var light = FindObjectOfType<Light2D>();
+            if (light == null) return;
+
+            var sortingLayerIds = new int[SortingLayer.layers.Length];
+            for (int i = 0; i < SortingLayer.layers.Length; i++)
+                sortingLayerIds[i] = SortingLayer.layers[i].id;
+
+            light.targetSortingLayers = sortingLayerIds;
+        }
+
+        private void EnsureBackground()
+        {
+            if (GameObject.Find("Background") != null) return;
+
+            var backgroundGo = new GameObject("Background");
+            backgroundGo.transform.position = Vector3.zero;
+
+            var spriteRenderer = backgroundGo.AddComponent<SpriteRenderer>();
+            spriteRenderer.sprite = CreateColoredSprite(new Color(0.22f, 0.32f, 0.22f), 64);
+            spriteRenderer.sortingOrder = -20;
+            ApplyUnlitSprite(spriteRenderer);
+
+            backgroundGo.transform.localScale = new Vector3(24f, 24f, 1f);
         }
 
         private void EnsureEventSystem()
@@ -103,8 +186,9 @@ namespace TopDownShooter
             playerGo.transform.position = Vector3.zero;
 
             var spriteRenderer = playerGo.AddComponent<SpriteRenderer>();
-            spriteRenderer.sprite = CreateColoredSprite(new Color(0.2f, 0.6f, 1f));
+            spriteRenderer.sprite = LoadSprite(PlayerSpritePath) ?? CreateColoredSprite(new Color(0.2f, 0.6f, 1f));
             spriteRenderer.sortingOrder = 10;
+            ApplyUnlitSprite(spriteRenderer);
 
             var rb = playerGo.AddComponent<Rigidbody2D>();
             rb.gravityScale = 0f;
@@ -121,10 +205,56 @@ namespace TopDownShooter
             var shooter = shooterGo.AddComponent<ProjectileShooter>();
             shooter.SetRuntimeReferences(_projectileTemplate, shooterGo.transform);
 
+            var laser = BuildLaser(playerGo.transform, shooterGo.transform);
+
             var player = playerGo.AddComponent<Player>();
-            player.SetRuntimeReferences(ui.HpSlider, ui.HpFillImage, ui.HpText, shooter, null);
+            player.SetRuntimeReferences(ui.HpSlider, ui.HpFillImage, ui.HpText, shooter, laser);
 
             return player;
+        }
+
+        private Laser BuildLaser(Transform playerTransform, Transform firePoint)
+        {
+            var laserGo = new GameObject("Laser");
+            laserGo.transform.SetParent(playerTransform);
+            laserGo.transform.localPosition = Vector3.zero;
+
+            var beamGo = new GameObject("LaserBeam");
+            beamGo.transform.SetParent(laserGo.transform);
+            beamGo.transform.localPosition = Vector3.zero;
+
+            var beam = beamGo.AddComponent<LineRenderer>();
+            beam.positionCount = 2;
+            beam.useWorldSpace = true;
+            beam.startWidth = 0.1f;
+            beam.endWidth = 0.04f;
+            beam.numCapVertices = 2;
+            beam.sortingOrder = 15;
+            beam.enabled = false;
+
+            var beamMaterial = new Material(Shader.Find("Sprites/Default"));
+            beamMaterial.color = Color.white;
+            beam.material = beamMaterial;
+            beam.startColor = new Color(1f, 0.25f, 0.25f, 0.95f);
+            beam.endColor = new Color(1f, 0.85f, 0.2f, 0.35f);
+
+            var laser = laserGo.AddComponent<Laser>();
+            laser.SetRuntimeReferences(firePoint, beam);
+            return laser;
+        }
+
+        private void EnsureLaserOnExistingPlayer()
+        {
+            var player = FindObjectOfType<Player>();
+            if (player == null || player.GetComponentInChildren<Laser>() != null)
+                return;
+
+            var firePoint = player.transform.Find("ProjectileShooter");
+            if (firePoint == null)
+                return;
+
+            var laser = BuildLaser(player.transform, firePoint);
+            player.SetLaser(laser);
         }
 
         private GameManager BuildGameManager(UIRefs ui, Player player)
@@ -178,12 +308,15 @@ namespace TopDownShooter
 
         private GameObject CreateEnemyTemplate()
         {
+            var templatesRoot = GetOrCreateTemplatesRoot();
             var enemyGo = new GameObject("EnemyTemplate");
+            enemyGo.transform.SetParent(templatesRoot.transform, false);
             enemyGo.SetActive(false);
 
             var spriteRenderer = enemyGo.AddComponent<SpriteRenderer>();
-            spriteRenderer.sprite = CreateColoredSprite(new Color(0.9f, 0.2f, 0.2f));
+            spriteRenderer.sprite = LoadSprite(EnemySpritePath) ?? CreateColoredSprite(new Color(0.9f, 0.2f, 0.2f));
             spriteRenderer.sortingOrder = 5;
+            ApplyUnlitSprite(spriteRenderer);
 
             var rb = enemyGo.AddComponent<Rigidbody2D>();
             rb.gravityScale = 0f;
@@ -199,12 +332,15 @@ namespace TopDownShooter
 
         private GameObject CreateProjectileTemplate()
         {
+            var templatesRoot = GetOrCreateTemplatesRoot();
             var projectileGo = new GameObject("ProjectileTemplate");
+            projectileGo.transform.SetParent(templatesRoot.transform, false);
             projectileGo.SetActive(false);
 
             var spriteRenderer = projectileGo.AddComponent<SpriteRenderer>();
             spriteRenderer.sprite = CreateColoredSprite(new Color(1f, 0.9f, 0.2f), 16);
             spriteRenderer.sortingOrder = 8;
+            ApplyUnlitSprite(spriteRenderer);
 
             var collider = projectileGo.AddComponent<CircleCollider2D>();
             collider.isTrigger = true;
@@ -216,12 +352,15 @@ namespace TopDownShooter
 
         private GameObject CreatePickupTemplate()
         {
+            var templatesRoot = GetOrCreateTemplatesRoot();
             var pickupGo = new GameObject("HealthPickupTemplate");
+            pickupGo.transform.SetParent(templatesRoot.transform, false);
             pickupGo.SetActive(false);
 
             var spriteRenderer = pickupGo.AddComponent<SpriteRenderer>();
             spriteRenderer.sprite = CreateColoredSprite(new Color(0.2f, 0.9f, 0.3f), 20);
             spriteRenderer.sortingOrder = 4;
+            ApplyUnlitSprite(spriteRenderer);
 
             var collider = pickupGo.AddComponent<CircleCollider2D>();
             collider.isTrigger = true;
@@ -229,6 +368,45 @@ namespace TopDownShooter
 
             pickupGo.AddComponent<HealthPickup>();
             return pickupGo;
+        }
+
+        private static GameObject GetOrCreateTemplatesRoot()
+        {
+            var existing = GameObject.Find("Templates");
+            if (existing != null) return existing;
+
+            var root = new GameObject("Templates");
+            root.SetActive(false);
+            return root;
+        }
+
+        private static Sprite LoadSprite(string assetPath)
+        {
+#if UNITY_EDITOR
+            var assets = AssetDatabase.LoadAllAssetsAtPath(assetPath);
+            foreach (var asset in assets)
+            {
+                if (asset is Sprite sprite)
+                    return sprite;
+            }
+#endif
+            return null;
+        }
+
+        private static void ApplyUnlitSprite(SpriteRenderer renderer)
+        {
+            if (renderer == null) return;
+
+            if (_unlitSpriteMaterial == null)
+            {
+                var shader = Shader.Find("Universal Render Pipeline/2D/Sprite-Unlit-Default")
+                    ?? Shader.Find("Sprites/Default");
+                if (shader != null)
+                    _unlitSpriteMaterial = new Material(shader);
+            }
+
+            if (_unlitSpriteMaterial != null)
+                renderer.sharedMaterial = _unlitSpriteMaterial;
         }
 
         private static Sprite CreateColoredSprite(Color color, int size = 32)

@@ -249,5 +249,10 @@ namespace TopDownShooter
             _laser = laser;
             UpdateHPBar();
         }
+
+        public void SetLaser(Laser laser)
+        {
+            _laser = laser;
+        }
     }
 }

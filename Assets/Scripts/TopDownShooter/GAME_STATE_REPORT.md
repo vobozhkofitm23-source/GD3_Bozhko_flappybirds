@@ -71,5 +71,7 @@ public enum GameState { Playing, GameOver }
 
 ## Запуск
 
-1. Відкрити сцену `Assets/Scenes/TopDownSurvival.unity`
-2. Натиснути Play — `TopDownSurvivalSetup` автоматично створює гравця, UI, ворогів і аптечки
+1. Відкрити сцену `Assets/Scenes/TopDownSurvival.unity` — об'єкти створюються автоматично (гравець, UI, точки спавну, аптечки).
+2. Зберегти сцену (`Ctrl+S`), щоб об'єкти залишились у Hierarchy.
+3. Або меню **Tools → TopDown Survival → Build Scene**.
+4. Натиснути **Play** для гри.
